@@ -146,12 +146,15 @@ pca_plot <- ggplot(PCA_values, aes(PC1, PC2, fill = cell_line)) +
     legend.title = element_blank(),
     legend.margin = margin(-2, 0, -5, 0),
     legend.key.size = unit(0.25, "cm"),
+    legend.text = element_text(vjust = 2),
     legend.position = "top") +
-  scale_fill_manual(labels = c("Wi", "H11"), values = c("#fde725", "#440154")) +
+  scale_fill_manual(labels = c("Wi" = expression(bold(Ctrl^phantom("/"))),
+                               "H11" = expression(bold("NF2"^"-/-"))), values = c("#fde725", "#440154")) +
   scale_x_continuous(expand = expansion(mult = c(0.3, 0.3))) +
   scale_y_continuous(expand = expansion(mult = c(0.3, 0.3))) +
   labs(
     x = paste0("PC1: ",percentVar[1],"% variance"),
     y = paste0("PC2: ",percentVar[2],"% variance")) 
 pca_plot
-ggsave("Figure/PCA_NF2_iPSC.tiff", pca_plot, units = "in", width = 2.15, height = 2.15, device = "tiff", dpi = 300)
+
+ggsave("Figure/PCA_NF2_iPSC.tiff", pca_plot, units = "in", width = 3, height = 3, device = "tiff", dpi = 300)
