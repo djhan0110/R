@@ -6,121 +6,64 @@ setwd("C:/Workspace/R/NF2/iPSC/RNA-seq")
 # Load libraries ----------------------------------------------------------
 library(readr)
 library(tidyverse)
-library(AnnotationDbi)
+library(clusterProfiler)
 library(org.Hs.eg.db)
-library(GO.db)
 library(ggplot2)
-
-library(ComplexHeatmap)
-library(colorRamp2)
-library(seriation)
-library(gridExtra)
+library(scales)
+library(ggforce)
+library(pathview)
 
 # Load result -------------------------------------------------------------
 NF2_iPSC_LFC <- read_csv("Export/NF2_iPSC_LFC.csv") 
 clean_LFC <- as.data.frame(janitor::clean_names(na.omit(NF2_iPSC_LFC))) %>% 
   mutate(nlogpadj = -log10(padj),
-         DEG = ifelse(padj < 0.05 & log2fold_change > 1, "Up",
-                       ifelse(padj < 0.05 & log2fold_change < -1, "Down", "ns")))
-filtered_LFC <- clean_LFC %>% 
-  filter(DEG != "ns")
-table(clean_LFC$DEG)
+         DEG = ifelse(log2fold_change > 1 & padj < 0.05, "Up",
+                       ifelse(log2fold_change < -1 & padj < 0.05, "Down", "ns")))
 
-NF2_iPSC_VST <- read_csv("Export/NF2_iPSC_VST.csv") 
-clean_VST <- as.data.frame(janitor::clean_names(na.omit(NF2_iPSC_VST)))
-
-merged_df <- clean_LFC %>% 
-  left_join(clean_VST, by = "x1")
-
-GO_up <- as.data.frame(enrichGO(gene = SiN_up$x1, OrgDb = "org.Hs.eg.db", keyType = "ENSEMBL", ont = "ALL")) %>%
-  mutate(nlogq = -log10(qvalue), attr = "Up")
-str_sub(GO_SiN_up$Description, 1, 1) <- str_sub(GO_SiN_up$Description, 1, 1) %>% str_to_upper()
-GO_SiN_up$conv_GR <- sapply(GO_SiN_up$GeneRatio, function(x) eval(parse(text = x)))
-write.csv(GO_SiN_up, "Export/GO_NF2_SCP_SiN_up.csv")
-
-GO_SiN_down <- as.data.frame(enrichGO(gene = SiN_down$x1, OrgDb = "org.Hs.eg.db", keyType = "ENSEMBL", ont = "ALL")) %>%
-  mutate(nlogq = -log10(qvalue), attr = "Down")
-str_sub(GO_SiN_down$Description, 1, 1) <- str_sub(GO_SiN_down$Description, 1, 1) %>% str_to_upper()
-GO_SiN_down$conv_GR <- sapply(GO_SiN_down$GeneRatio, function(x) eval(parse(text = x)))
-write.csv(GO_SiN_down, "Export/GO_NF2_SCP_SiN_down.csv")
-
-
-# GO ----------------------------------------------------------------------
-GO_ids <- c(
-  "GO:0006897",
-  "GO:0015695",
-  "GO:0015867",
-  "GO:0030647",
-  "GO:0042490")
-
-retrieve_genes <- AnnotationDbi::select(org.Hs.eg.db, keys = GO_ids, keytype = "GOALL",  columns=c("ENSEMBL", "SYMBOL")) %>% 
-  mutate(AnnotationDbi::select(GO.db, keys = GOALL, keytype = "GOID",  columns = "TERM")) %>% 
-  mutate(TERM = paste(toupper(substr(TERM, 1, 1)), substr(TERM, 2, nchar(TERM)), sep = "")) %>% 
-  left_join(merged_df, by = c("ENSEMBL" = "x1")) %>% 
-  filter(!grepl("ns", DEG)) %>% 
-  na.omit()
-
-retrieve_genes$TERM <- factor(retrieve_genes$TERM)
-
-distinct_genes <- retrieve_genes %>%
-  group_by(TERM) %>%
-  distinct(SYMBOL, .keep_all = TRUE) %>% 
-  ungroup()
-
-heatmap_column <- c(grep("i_ps.*", colnames(distinct_genes), value = TRUE))
-
-# Create a list to store separate dataframes and heatmaps
-GOID_list <- list()
-
-for (id in GO_ids) {
-  # Create a new dataframe and set row names
-  mat_df <- as.data.frame(distinct_genes[distinct_genes$GOID == id, c(5, 16:27)])
-  rownames(mat_df) <- mat_df$SYMBOL
+GO_process <- function(gene_subset, DEG) {
+  result <- as.data.frame(enrichGO(gene = gene_subset,
+                                   OrgDb = "org.Hs.eg.db",
+                                   keyType = "ENSEMBL",
+                                   ont = "ALL")) %>%
+    mutate(nlogq = -log10(qvalue), DEG = DEG)
+  str_sub(result$Description, 1, 1) <- str_sub(result$Description, 1, 1) %>% str_to_upper()
+  result$conv_GR <- sapply(result$GeneRatio, function(x) eval(parse(text = x)))
+  result <- result[order(result$conv_GR, decreasing = T), ]
   
-  # Remove the "SYMBOL" column
-  mat_df <- mat_df[, -1]
-  
-  # Assign the dataframe to a variable with a dynamic name
-  assign(paste0("mat_", id), as.matrix(mat_df))
+  return(result)
 }
 
-for (id in GO_ids) {
-  seriated_df <- seriate(dist(get(paste0("mat_", id))), method = "TSP")
-  assign(paste0("seriated_", id), seriated_df)
-}
+GO_up <- GO_process(clean_LFC$x1[clean_LFC$DEG == "Up"], "Up")
+GO_down <- GO_process(clean_LFC$x1[clean_LFC$DEG == "Down"], "Down")
 
-# Create a list to store heatmaps
-Heatmap_list <- list()
+split_up <- split(GO_up, GO_up$ONTOLOGY)
+split_down <- split(GO_down, GO_down$ONTOLOGY)
 
-for (id in GO_ids) {
-  # Generate a heatmap for each GO term and store it in the Heatmap_list
-  Heatmap_list[[id]] <- Heatmap(get(paste0("mat_", id)), name = "VST",
-                                show_row_dend = FALSE, row_order = get_order(get(paste0("seriated_", id))),
-                                row_names_side = "left", row_names_gp = gpar(fontface = "bold.italic"), 
-                                column_split = factor(rep(c("iPSC", "OPC"), each = 6), levels = c("iPSC", "OPC")),
-                                column_order = heatmap_column,
-                                column_title_gp = gpar(fontface = "bold"),
-                                #left_annotation = annotation_GOs,
-                                #row_title = GOs_title, row_title_gp = gpar(col = "black"),
-                                border = TRUE)
-  
-  
-  
-  
-}
+topN <- 3
+bind_up <- rbind(head(split_up$BP, topN), head(split_up$CC, topN), head(split_up$MF, topN))
+bind_down <- rbind(head(split_down$BP, topN), head(split_down$CC, topN), head(split_down$MF, topN))
 
+bind_GO <- rbind(bind_up, bind_down)
+bind_GO$DEG <- factor(bind_GO$DEG, levels = c("Up", "Down"))
 
+# Plotting ----------------------------------------------------------------
+plot_GO <- ggplot(bind_GO, aes(x = conv_GR, y = reorder(Description, conv_GR))) +
+  geom_col(aes(fill = ONTOLOGY), color = "black", width = 0.1, linewidth = 0.2) +
+  geom_point(aes(size = Count, fill = ONTOLOGY), shape = 21, color = "black", stroke = 0.3) +
+  facet_col(~ DEG, scales = "free", space = "free", strip.position = "right") +
+  scale_fill_ordinal() +
+  scale_x_continuous(expand = expansion(mult = c(0, 0.1))) +
+  scale_y_discrete(labels = function(x) str_wrap(x, width = 50)) +
+  scale_size_continuous(range = c(1, 4), breaks = pretty_breaks(n = 4)) +
+  labs(x = "Gene Ratio", y = "", size = expression(bold("-Log("*bolditalic(q)*")")), fill = "Ontology") +
+  theme_classic() +
+  theme(text = element_text(color = "black", face = "bold"),
+        axis.text = element_text(color = "black", face = "bold"),
+        strip.background = element_blank(),
+        legend.key.size = unit(3, "mm"),
+        legend.position = "top",
+        legend.justification = c(0.95, 0),
+        legend.background = element_blank())
 
-# Display or save the heatmaps in a loop
-for (id in GO_ids) {
-  tiff(
-    file = paste0("Figure/OPC_Heatmap_", id, ".tiff"), 
-    res = 300, 
-    width = 4.3, 
-    height = 4.3, 
-    units = "in"
-  )
-  draw(Heatmap_list[[id]])
-  dev.off()  # Close the TIFF device after drawing
-  
-}
+plot_GO
+ggsave("Figure/NF2_iPSC_GO.tiff", plot_GO, units = "in", width = 5, height = 5, device = "tiff", dpi = 300)
