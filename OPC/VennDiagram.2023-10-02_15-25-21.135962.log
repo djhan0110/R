@@ -1,0 +1,12 @@
+INFO [2023-10-02 15:25:21] $x
+INFO [2023-10-02 15:25:21] list(Set1 = set1_size, Set2 = set2_size)
+INFO [2023-10-02 15:25:21] 
+INFO [2023-10-02 15:25:21] $category.names
+INFO [2023-10-02 15:25:21] c("Set1", "Set2")
+INFO [2023-10-02 15:25:21] 
+INFO [2023-10-02 15:25:21] $filename
+INFO [2023-10-02 15:25:21] NULL
+INFO [2023-10-02 15:25:21] 
+INFO [2023-10-02 15:25:21] $intersection_area
+INFO [2023-10-02 15:25:21] intersection_size
+INFO [2023-10-02 15:25:21] 
