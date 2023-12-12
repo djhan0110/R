@@ -13,8 +13,8 @@ library(org.Hs.eg.db)
 library(ggforce)
 
 # Load count matrix -------------------------------------------------------
-RCs_NF2_iPSC <- read.csv("Raw_data/RCs_NF2_iPSC.csv")
-raw_data <- RCs_NF2_iPSC
+NF2_iPSC_RC <- read.csv("Raw_data/NF2_iPSC_RC.csv")
+raw_data <- NF2_iPSC_RC
 
 clean_df <- janitor::clean_names(na.omit(raw_data)) %>%
   column_to_rownames(var = "x")

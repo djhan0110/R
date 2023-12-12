@@ -12,6 +12,9 @@
 /*.tar.gz
 # Output files from R CMD check
 /*.Rcheck/
+# Output files from ggplot
+/*.tiff
+/*.pdf
 # RStudio files
 .Rproj.user/
 # produced vignettes
